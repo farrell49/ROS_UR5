@@ -1,0 +1,112 @@
+#!/usr/bin/env python
+
+import sys
+import copy
+import rospy
+import moveit_commander
+from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
+import geometry_msgs.msg
+from std_msgs.msg import String
+from trajectory_msgs.msg import JointTrajectory, MultiDOFJointTrajectory
+
+from comp650_pkg.srv import *
+
+class PlanningService(object):
+
+    def handle_planning_service_request(self, req):
+
+        if "plan" in req.REQUEST_TYPE:
+            rospy.loginfo("PlanningServer::handle_planning_service_request -- plan requested")
+            plan_resp = self.handle_plan_request(req)
+            return plan_resp
+        elif "show" in req.REQUEST_TYPE:
+            rospy.loginfo("PlanningServer::handle_planning_service_request -- show requested")
+            self.handle_show_request(req)
+            return True
+        elif "execute" in req.REQUEST_TYPE:
+            rospy.loginfo("PlanningServer::handle_planning_service_request -- execute requested")
+            self.handle_execute_request(req)
+            return True
+        else:
+            rospy.logwarn("A service request has been made with an unrecognized request type")
+            return False
+
+        return True
+
+    def handle_plan_request(self, req):
+        #set group
+        if "manipulator" in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander("manipulator")
+        elif "gripper" in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander("gripper")
+        else:
+            rospy.logwarn("PlanningService::handle_plan_request() -- requested group is not recognized")
+            return False
+        self.group.set_planner_id("RRTConnectkConfigDefault")
+
+        self.group.set_random_target()
+
+        plan_resp = self.group.plan()
+        rospy.loginfo("plan_resp.joint_trajectory.joint_names = %s",plan_resp.joint_trajectory.joint_names)
+        if plan_resp.joint_trajectory.joint_names:
+            rospy.loginfo("PlanningService::handle_plan_request() -- plan successful")
+            rospy.loginfo("Plan = %s", plan_resp)
+            return True
+        else:
+            rospy.loginfo("PlanningService::handle_plan_request() -- plan FAIL")
+            return False
+
+    def handle_show_request(self, req):
+        display_trajectory = DisplayTrajectory()
+
+        display_trajectory.trajectory_start = self.robot.get_current_state()
+        #build moveit msg for display
+        joint_multi_traj_msg = MultiDOFJointTrajectory()
+        robot_traj_msg = RobotTrajectory()
+        robot_traj_msg.joint_trajectory = req.JOINT_TRAJECTORY
+        robot_traj_msg.multi_dof_joint_trajectory = joint_multi_traj_msg
+
+        display_trajectory.trajectory.append(robot_traj_msg)
+        rospy.loginfo("PlanningService::handle_show_request() -- showing trajectory %s", req.JOINT_TRAJECTORY)
+
+        self.display_trajectory_publisher.publish(display_trajectory);
+
+        return True
+
+    def handle_execute_request(self, req):
+        if "manipulator" in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander("manipulator")
+        elif "gripper" in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander("gripper")
+        else:
+            rospy.logwarn("PlanningService::handle_plan_request() -- requested group is not recognized")
+            return False
+
+        #build moveit msg for display
+        joint_multi_traj_msg = MultiDOFJointTrajectory()
+        robot_traj_msg = RobotTrajectory()
+        robot_traj_msg.joint_trajectory = req.JOINT_TRAJECTORY
+        robot_traj_msg.multi_dof_joint_trajectory = joint_multi_traj_msg
+
+        self.group.execute(robot_traj_msg, wait=True)
+
+
+    def planning_service(self):
+        self.s = rospy.Service('planning_server', PlanningRequest, self.handle_planning_service_request)
+
+        moveit_commander.roscpp_initialize(sys.argv)  #initialize movit commander
+        self.robot = moveit_commander.RobotCommander()   #create robotcommander instance
+        self.scene = moveit_commander.PlanningSceneInterface()   #setup for planning scene
+        #create publisher to visualize later
+        self.display_trajectory_publisher = rospy.Publisher(
+                                          '/move_group/display_planned_path',
+                                          DisplayTrajectory,queue_size=10)
+
+        rospy.loginfo("planning_service -- Ready to recieve planning related requests")
+        rospy.spin()
+
+
+if __name__=='__main__':
+  rospy.init_node('planning_server')
+  planning_service = PlanningService()
+  planning_service.planning_service()
