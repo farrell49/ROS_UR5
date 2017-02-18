@@ -5,7 +5,7 @@ import copy
 import rospy
 import moveit_commander
 from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
-import geometry_msgs.msg
+from geometry_msgs.msg import Pose, PoseStamped
 from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory, MultiDOFJointTrajectory
 
@@ -18,15 +18,20 @@ class PlanningService(object):
         if "plan" in req.REQUEST_TYPE:
             rospy.loginfo("PlanningServer::handle_planning_service_request -- plan requested")
             plan_resp = self.handle_plan_request(req)
-            return plan_resp
+            return plan_resp, None
         elif "show" in req.REQUEST_TYPE:
             rospy.loginfo("PlanningServer::handle_planning_service_request -- show requested")
             self.handle_show_request(req)
-            return True
+            return True, None
         elif "execute" in req.REQUEST_TYPE:
             rospy.loginfo("PlanningServer::handle_planning_service_request -- execute requested")
             self.handle_execute_request(req)
-            return True
+            return True, None
+        elif "joint_states" in req.REQUEST_TYPE:
+            rospy.loginfo("PlanningServer::handle_planning_service_request -- position requested")
+            joint_states = self.handle_joint_state_request(req)
+            rospy.loginfo('pose returned = {}'.format(joint_states))
+            return (True, joint_states)
         else:
             rospy.logwarn("A service request has been made with an unrecognized request type")
             return False
@@ -90,6 +95,39 @@ class PlanningService(object):
 
         self.group.execute(robot_traj_msg, wait=True)
 
+    def handle_joint_state_request(self, req):
+        if 'manipulator' in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander('manipulator')
+            joint_states = self.group.get_current_joint_values()
+            rospy.loginfo('joint_states manipulator= {}'.format(joint_states))
+            rospy.loginfo('type(joint_states) = {}'.format(type(joint_states)))
+            return joint_states
+        elif 'gripper' in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander('gripper')
+            joint_states = self.group.get_current_joint_values()
+            rospy.loginfo('joint_states gripper = {}'.format(joint_states))
+            return joint_states
+        else:
+            rospy.logwarn('group type not recognized')
+            return False
+
+    '''Don't need right now actually, but I'll just leave this right here...
+    def handle_pose_request(self, req):
+        pose = PoseStamped()
+        if 'manipulator' in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander('manipulator')
+            pose = self.group.get_current_pose()
+            rospy.loginfo('pose = {}'.format(pose))
+            rospy.loginfo('type(pose) = {}'.format(type(pose)))
+            return pose
+        elif 'gripper' in req.REQUEST_TYPE:
+            self.group = moveit_commander.MoveGroupCommander('gripper')
+            pose = self.group.get_current_pose()
+            rospy.loginfo('pose = {}'.format(pose))
+            return pose
+        else:
+            return False
+    '''
 
     def planning_service(self):
         self.s = rospy.Service('planning_server', PlanningRequest, self.handle_planning_service_request)
