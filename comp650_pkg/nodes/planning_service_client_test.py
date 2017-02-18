@@ -33,7 +33,7 @@ def request_show():
 
         REQUEST_TYPE = "show_gripper"
         #TRAJECTORY = JointTrajectory()
-        f = open(rospack.get_path("comp650_pkg")+"/traj.yaml")
+        f = open(rospack.get_path("comp650_pkg")+"/traj_gripper.yaml")
         TRAJECTORY = load(f)
         f.close()
         rospy.loginfo("traj_yaml = %s", TRAJECTORY)
@@ -57,6 +57,34 @@ def request_execute():
 
         rospy.loginfo("Requesting Execute")
         response = plan_request(REQUEST_TYPE, TRAJECTORY)
+    except rospy.ServiceException, e:
+        print "Service call failed: %s"%e
+    return True
+'''
+def request_pose():
+    try:
+        plan_request = rospy.ServiceProxy('planning_server', PlanningRequest)
+
+        REQUEST_TYPE = "pose_gripper"
+        TRAJECTORY = JointTrajectory()
+        rospy.loginfo('requesting pose')
+        resp = plan_request(REQUEST_TYPE, TRAJECTORY)
+        rospy.loginfo('pose = {}'.format(resp))
+
+    except rospy.ServiceException, e:
+        print "Service call failed: %s"%e
+    return True
+'''
+def request_joint_states():
+    try:
+        plan_request = rospy.ServiceProxy('planning_server', PlanningRequest)
+
+        REQUEST_TYPE = "joint_states_gripper"
+        TRAJECTORY = JointTrajectory()
+        rospy.loginfo('requesting pose')
+        resp = plan_request(REQUEST_TYPE, TRAJECTORY)
+        rospy.loginfo('pose = {}'.format(resp))
+
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
     return True
